@@ -16,6 +16,9 @@
 #define getBTCAPI "https://api.blockchain.com/v3/exchange/tickers/BTC-USD"
 #define UPDATE_BTC_min   1
 
+//API CHF price
+#define getCHFAPI "https://open.er-api.com/v6/latest/CHF"
+
 //API Block height
 #define getHeightAPI "https://mempool.space/api/blocks/tip/height"
 #define UPDATE_Height_min 2
@@ -70,10 +73,19 @@ typedef struct {
 }mining_data;
 
 typedef struct {
+  String time_last_update_utc;
+  String time_next_update_utc;  
+  String chf_price;
+  long time_last_update_unix;
+  long time_next_update_unix;
+}chf_data;
+
+typedef struct {
   String completedShares;
   String totalKHashes;
   String currentHashRate;
   String btcPrice;
+  chf_data chfData;
   String blockHeight;
   String currentTime;  
   String currentDate;
@@ -82,6 +94,7 @@ typedef struct {
 typedef struct {
   String currentHashRate;
   String valids;
+  unsigned long currentTime;
   unsigned long currentHours;
   unsigned long currentMinutes;
   unsigned long currentSeconds;
@@ -115,6 +128,7 @@ coin_data getCoinData(unsigned long mElapsed);
 pool_data getPoolData(void);
 
 clock_data_t getClockData_t(unsigned long mElapsed);
+String getDate(unsigned long time);
 
 
 #endif //MONITOR_API_H

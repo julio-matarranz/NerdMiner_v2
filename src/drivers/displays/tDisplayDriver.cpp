@@ -238,6 +238,59 @@ void tDisplay_BTCprice(unsigned long mElapsed)
   background.pushSprite(0, 0);
 }
 
+void tDisplay_CHFprice(unsigned long mElapsed)
+{
+  clock_data data = getClockData(mElapsed);
+  data.currentDate ="01/12/2023";
+  
+  //if(data.currentDate.indexOf("12/2023")>) { tDisplay_ChristmasContent(data); return; }
+
+  // Print background screen
+  background.pushImage(0, 0, priceScreenWidth, priceScreenHeight, priceScreen);
+  background.pushImage(0, 0, david_width, david_height, david);
+  background.pushImage(100, 0, ch_ue_flag_width, ch_ue_flag_height, ch_ue_flag);
+
+  Serial.printf(">>> Completed %s share(s), %s Khashes, avg. hashrate %s KH/s\n",
+                data.completedShares.c_str(), data.totalKHashes.c_str(), data.currentHashRate.c_str());
+
+  // Hashrate
+  render.setFontSize(25);
+  render.setCursor(19, 122);
+  render.setFontColor(TFT_BLACK);
+  render.rdrawString(data.currentHashRate.c_str(), 94, 129, TFT_BLACK);
+
+  // Print BlockHeight
+  render.setFontSize(18);
+  render.rdrawString(data.blockHeight.c_str(), 254, 138, TFT_WHITE);
+
+  // Print Hour
+  
+  background.setFreeFont(FSSB9);
+  background.setTextSize(1);
+  background.setTextDatum(TL_DATUM);
+  background.setTextColor(TFT_BLACK);
+  background.drawString(data.currentTime.c_str(), 222, 3, GFXFF);
+
+  // Print CHF Update last next update 
+  background.setFreeFont(FSSB9);
+  background.setTextSize(1);
+  background.setTextDatum(TR_DATUM);
+  background.setTextColor(0xDEDB, TFT_BLACK);
+  background.drawString(("last " + data.chfData.time_last_update_utc).c_str(), 320, 40, GFXFF);
+  background.drawString(("next " + data.chfData.time_next_update_utc).c_str(), 320, 60, GFXFF);
+
+
+  // Print CHF Price 
+  background.setFreeFont(FF14);
+  background.setTextDatum(TR_DATUM);
+  background.setTextSize(1);
+  background.setTextColor(0xDEDB, TFT_BLACK);
+  background.drawString(data.chfData.chf_price.c_str(), 320, 90, GFXFF);
+
+  // Push prepared background to screen
+  background.pushSprite(0, 0);
+}
+
 void tDisplay_LoadingScreen(void)
 {
   tft.fillScreen(TFT_BLACK);
@@ -259,7 +312,7 @@ void tDisplay_DoLedStuff(unsigned long frame)
 {
 }
 
-CyclicScreenFunction tDisplayCyclicScreens[] = {tDisplay_MinerScreen, tDisplay_ClockScreen, tDisplay_GlobalHashScreen, tDisplay_BTCprice};
+CyclicScreenFunction tDisplayCyclicScreens[] = {tDisplay_CHFprice, tDisplay_MinerScreen, tDisplay_ClockScreen, tDisplay_GlobalHashScreen, tDisplay_BTCprice};
 
 DisplayDriver tDisplayDriver = {
     tDisplay_Init,

@@ -29,6 +29,7 @@ extern TSettings Settings;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", 3600, 60000);
 unsigned int bitcoin_price=0;
+chf_data chfData = {"na", "na","na", 0};
 String current_block = "793261";
 global_data gData;
 pool_data pData;
@@ -40,7 +41,7 @@ void setup_monitor(void){
     
     // Adjust offset depending on your zone
     // GMT +2 in seconds (zona horaria de Europa Central)
-    timeClient.setTimeOffset(3600 * Settings.Timezone);
+    timeClient.setTimeOffset(3600 * Settings.Timezone);    
 
     Serial.println("TimeClient setup done");    
 }
@@ -168,29 +169,77 @@ String getBTCprice(void){
   return (String(bitcoin_price) + "$");
 }
 
+unsigned long mCHFUpdate = 0;
+
+chf_data getCHFData(clock_data_t data){
+      
+    if((mCHFUpdate == 0) || (data.currentTime >= chfData.time_next_update_unix)){
+    
+        if (WiFi.status() != WL_CONNECTED) return chfData;
+        
+        HTTPClient http;
+        try {
+        http.begin(getCHFAPI);
+        int httpCode = http.GET();
+
+        if (httpCode == HTTP_CODE_OK) {
+            String payload = http.getString();
+
+            DynamicJsonDocument doc(2048);
+            deserializeJson(doc, payload);
+            
+            if (doc.containsKey("rates")) chfData.chf_price = "1CHF = " + String(doc["rates"]["EUR"].as<double>(), 6) + "EUR";
+            if (doc.containsKey("time_last_update_unix")) {
+              chfData.time_last_update_unix = doc["time_last_update_unix"].as<long>();              
+              char last_update[30];
+              sprintf(last_update, "%s %02d:%02d:%02d",getDate(chfData.time_last_update_unix), (chfData.time_last_update_unix % 86400 / 3600), (chfData.time_last_update_unix % 3600 / 60), (chfData.time_last_update_unix % 60));
+              String mystring(last_update);
+              chfData.time_last_update_utc = last_update;
+            }
+            if (doc.containsKey("time_next_update_unix")) {
+              chfData.time_next_update_unix = doc["time_next_update_unix"].as<long>();
+              char next_update[30];
+              sprintf(next_update, "%s %02d:%02d:%02d",getDate(chfData.time_next_update_unix),  (chfData.time_next_update_unix % 86400 / 3600), (chfData.time_next_update_unix % 3600 / 60), (chfData.time_next_update_unix % 60));
+              String mystring(next_update);
+              chfData.time_next_update_utc = next_update;
+            }
+            doc.clear();
+
+            mCHFUpdate = millis();
+        }
+        
+        http.end();
+        } catch(...) {
+          http.end();
+        }
+    }
+  
+  return chfData;
+}
+
 unsigned long mTriggerUpdate = 0;
 unsigned long initialMillis = millis();
 unsigned long initialTime = 0;
 unsigned long mPoolUpdate = 0;
 
-void getTime(unsigned long* currentHours, unsigned long* currentMinutes, unsigned long* currentSeconds){
+void getTime(unsigned long* currentHours, unsigned long* currentMinutes, unsigned long* currentSeconds, unsigned long* currentTime){
   
   //Check if need an NTP call to check current time
   if((mTriggerUpdate == 0) || (millis() - mTriggerUpdate > UPDATE_PERIOD_h * 60 * 60 * 1000)){ //60 sec. * 60 min * 1000ms
     if(WiFi.status() == WL_CONNECTED) {
         if(timeClient.update()) mTriggerUpdate = millis(); //NTP call to get current time
-        initialTime = timeClient.getEpochTime(); // Guarda la hora inicial (en segundos desde 1970)
+        initialTime = timeClient.getEpochTime(); // Guarda la hora inicial (en segundos desde 1970)              
         Serial.print("TimeClient NTPupdateTime ");
     }
   }
 
   unsigned long elapsedTime = (millis() - mTriggerUpdate) / 1000; // Tiempo transcurrido en segundos
-  unsigned long currentTime = initialTime + elapsedTime; // La hora actual
+  *currentTime = initialTime + elapsedTime; // La hora actual
 
   // convierte la hora actual en horas, minutos y segundos
-  *currentHours = currentTime % 86400 / 3600;
-  *currentMinutes = currentTime % 3600 / 60;
-  *currentSeconds = currentTime % 60;
+  *currentHours = *currentTime % 86400 / 3600;
+  *currentMinutes = *currentTime % 3600 / 60;
+  *currentSeconds = *currentTime % 60;
 }
 
 String getDate(){
@@ -198,8 +247,11 @@ String getDate(){
   unsigned long elapsedTime = (millis() - mTriggerUpdate) / 1000; // Tiempo transcurrido en segundos
   unsigned long currentTime = initialTime + elapsedTime; // La hora actual
 
-  // Convierte la hora actual (epoch time) en una estructura tm
-  struct tm *tm = localtime((time_t *)&currentTime);
+  return getDate(currentTime);
+}
+
+String getDate(unsigned long time){
+  struct tm *tm = localtime((time_t *)&time);
 
   int year = tm->tm_year + 1900; // tm_year es el número de años desde 1900
   int month = tm->tm_mon + 1;    // tm_mon es el mes del año desde 0 (enero) hasta 11 (diciembre)
@@ -211,9 +263,9 @@ String getDate(){
   return String(currentDate);
 }
 
-String getTime(void){
-  unsigned long currentHours, currentMinutes, currentSeconds;
-  getTime(&currentHours, &currentMinutes, &currentSeconds);
+String getTime(){
+  unsigned long currentHours, currentMinutes, currentSeconds, currentTime;
+  getTime(&currentHours, &currentMinutes, &currentSeconds, &currentTime);
 
   char LocalHour[10];
   sprintf(LocalHour, "%02d:%02d", currentHours, currentMinutes);
@@ -264,6 +316,7 @@ clock_data getClockData(unsigned long mElapsed)
   data.totalKHashes = totalKHashes;
   data.currentHashRate = getCurrentHashRate(mElapsed);
   data.btcPrice = getBTCprice();
+  data.chfData = getCHFData(getClockData_t(mElapsed));
   data.blockHeight = getBlockHeight();
   data.currentTime = getTime();
   data.currentDate = getDate();
@@ -276,8 +329,8 @@ clock_data_t getClockData_t(unsigned long mElapsed)
   clock_data_t data;
 
   data.valids = valids;
-  data.currentHashRate = getCurrentHashRate(mElapsed);
-  getTime(&data.currentHours, &data.currentMinutes, &data.currentSeconds);
+  data.currentHashRate = getCurrentHashRate(mElapsed);  
+  getTime(&data.currentHours, &data.currentMinutes, &data.currentSeconds, &data.currentTime);
 
   return data;
 }
@@ -292,6 +345,7 @@ coin_data getCoinData(unsigned long mElapsed)
   data.totalKHashes = totalKHashes;
   data.currentHashRate = getCurrentHashRate(mElapsed);
   data.btcPrice = getBTCprice();
+  unsigned long currentTime;
   data.currentTime = getTime();
   data.halfHourFee = String(gData.halfHourFee) + " sat/vB";
   data.netwrokDifficulty = gData.difficulty;
