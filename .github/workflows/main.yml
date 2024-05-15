@@ -5,7 +5,7 @@ on:
     branches:
       - master
       - dev
-
+      - chore/build-all
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,6 +26,8 @@ jobs:
         run: pip install --upgrade platformio
       - name: Build PlatformIO Project
         run: pio run
+      - name: Read build content
+        run: find .pio/build/ -mindepth 1 -maxdepth 2 -type f
       - name: Archive built binaries
         uses: actions/upload-artifact@v4
         with:
@@ -48,7 +50,7 @@ jobs:
       contents: write
       discussions: write
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev'
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/chore/build-all'
     steps:
       - name: Download built binaries
         uses: actions/download-artifact@v4
